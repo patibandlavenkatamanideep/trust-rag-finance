@@ -1,8 +1,9 @@
 """Composition root: build the pipeline by wiring concrete adapters to seams.
 
-Phase 1 wires stubs (StubRetriever / StubSynthesizer / StubJudge / in-memory
-audit) plus the REAL deterministic citation verifier. Swapping in OpenSearch,
-an LLM, or Postgres later means changing only this file.
+Phase 3 wires the real HybridRetriever (BM25 + dense + RRF + rerank over the
+SQLite ChunkStore) alongside the REAL deterministic citation verifier. Synthesis
++ judge are still stubs (Phase 4/5). Swapping in OpenSearch, an LLM, or Postgres
+later means changing only this file.
 """
 
 from __future__ import annotations
@@ -10,9 +11,14 @@ from __future__ import annotations
 from functools import lru_cache
 
 from audit.memory import InMemoryAuditStore
-from retrieval.stub import StubRetriever
+from retrieval.hybrid import HybridRetriever
+from retrieval.rerank import get_reranker
+from retrieval.store import SqliteChunkStore
+from shared.config import get_settings
+from shared.embeddings import get_embedder
+from shared.interfaces import Retriever
 from shared.schemas import CitedAnswer, RetrievedSource, VerificationResult
-from synthesis.stub import StubSynthesizer
+from synthesis import get_synthesizer
 from verification.citation import verify_citations
 from verification.judge import StubJudge
 
@@ -28,15 +34,25 @@ class _CitationVerifierAdapter:
         return verify_citations(answer, sources)
 
 
-# Shared singletons (audit must persist across requests within a process).
+# Shared singletons (audit persists across requests; retriever caches its index).
 _AUDIT = InMemoryAuditStore()
+
+
+@lru_cache
+def get_retriever() -> Retriever:
+    cfg = get_settings()
+    return HybridRetriever(
+        store=SqliteChunkStore(cfg.chunk_store_url),
+        embedder=get_embedder(cfg),
+        reranker=get_reranker(cfg),
+    )
 
 
 @lru_cache
 def get_pipeline() -> QueryPipeline:
     return QueryPipeline(
-        retriever=StubRetriever(),
-        synthesizer=StubSynthesizer(),
+        retriever=get_retriever(),
+        synthesizer=get_synthesizer(),
         verifier=_CitationVerifierAdapter(),
         judge=StubJudge(),
         audit=_AUDIT,

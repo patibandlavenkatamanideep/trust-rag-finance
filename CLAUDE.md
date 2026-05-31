@@ -1115,5 +1115,25 @@ Implementation notes added during the Phase 1 scaffold:
   (path contains a space). Imports resolve via: pytest pythonpath, `scripts/*` sys.path
   inserts, and a path bootstrap in `apps/api/app/__init__.py` for the server. Third-party
   deps still come from the normal `pip install -e .`.
-* NOTE: the live `/query` pipeline still uses `StubRetriever` — wiring the real retriever
-  to read from the ChunkStore (hybrid BM25+dense+RRF+rerank) is Phase 3.
+## Build Log — Phase 3 (Retrieval) complete
+
+* `HybridRetriever` (`retrieval/hybrid.py`) implements the `Retriever` seam: metadata
+  pre-filter (ticker, via `retrieval/query_parse.py`) -> BM25 top-N (`retrieval/bm25.py`)
+  + dense top-N (`retrieval/dense.py`, brute-force cosine over stored embeddings) -> RRF
+  fuse -> cross-encoder rerank (`retrieval/rerank.py`) -> top-k with source_ids + provenance.
+* Reranker seam: `StubReranker` (lexical overlap, default) + optional `CrossEncoderReranker`
+  (`[ml]`). Embedder reused from ingest (same vectors, D9).
+* Wired into the live pipeline in `apps/api/app/deps.py` (replaces StubRetriever). New routes
+  `POST /retrieve` and `POST /retrieve/refresh` (`app/routes/retrieve.py`).
+* Index built lazily from `store.all_current()` and cached; `refresh()` after ingest.
+* Tests: BM25 ranking, dense self-retrieval, hybrid relevance + source_id assignment,
+  ticker filter excludes other companies, empty store -> []. Full suite: 29 passing.
+* KNOWN GAP (expected): `/query` does NOT yet abstain on out-of-corpus questions because the
+  StubSynthesizer echoes retrieved text and StubJudge rubber-stamps it. Real relevance
+  judgment + abstention is Phase 4 (LLM synthesizer) + Phase 5 (judge). Retrieval is correct.
+
+## macOS perf note
+
+Freshly pip-installed native libs (numpy/OpenBLAS, pydantic-core, psycopg) get Gatekeeper-
+scanned on first import (~60s/process, 0% CPU). Fix once after install:
+`xattr -dr com.apple.quarantine .venv`. After that, imports are cached and fast.

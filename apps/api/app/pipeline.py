@@ -67,6 +67,12 @@ class QueryPipeline:
             if answer.confidence.band == "high":
                 answer.confidence.band = "low"
 
+        # Without a certifying judge, an uncertified synthesizer (e.g. extractive,
+        # no-LLM) cannot claim "high" — cap at medium to honor the cardinal rule.
+        if getattr(self.synthesizer, "certified", True) is False:
+            if answer.confidence.band == "high":
+                answer.confidence.band = "medium"
+
         latency_ms = int((time.perf_counter() - t0) * 1000)
 
         # 6. audit (append-only)

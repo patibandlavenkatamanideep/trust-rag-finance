@@ -7,7 +7,14 @@ from fastapi import FastAPI
 from shared.config import get_settings
 from shared.logging import configure_logging
 
-from app.routes import audit, eval as eval_routes, feedback, health, query
+from app.routes import (
+    audit,
+    eval as eval_routes,
+    feedback,
+    health,
+    query,
+    retrieve,
+)
 
 cfg = get_settings()
 configure_logging(cfg.log_level)
@@ -21,6 +28,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(query.router)
+app.include_router(retrieve.router)
 app.include_router(feedback.router)
 app.include_router(audit.router)
 app.include_router(eval_routes.router)

@@ -68,8 +68,8 @@ stub adapters for real LLM / retrieval / Postgres behind the same interfaces.
 |---|---|---|
 | 1 Skeleton | monorepo, FastAPI, pipeline, audit, UI, tests, Docker | ✅ done |
 | 2 Ingestion | load (.txt/.pdf), structure-aware chunk, metadata, embed, SQLite index | ✅ done |
-| 3 Retrieval | BM25 + dense + RRF + rerank over the index | 🔜 RRF + store done, adapters next |
-| 4 Synthesis | LLM adapter + cited generation | 🔜 stub abstains |
+| 3 Retrieval | BM25 + dense + RRF + cross-encoder rerank over the index, ticker filter | ✅ done |
+| 4 Synthesis | LLM adapter + cited generation | 🔜 stub (real LLM next) |
 | 5 Verification | judge + confidence calibration | 🔜 deterministic verifier done |
 | 6 HITL UI | full widget | 🔜 baseline shipped |
 | 7 Evals | runner + dashboard | 🔜 golden set + bars defined |
@@ -81,7 +81,12 @@ Requires Python 3.11+.
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,ui]"     # installs third-party deps; our packages also resolve via path bootstrap
+pip install -e ".[dev,ui]"     # installs third-party deps
+python scripts/dev_link.py     # makes `import shared` etc. work in any process (see note below)
+
+# macOS only: clear Gatekeeper quarantine on freshly-installed native libs
+# (otherwise numpy/pydantic-core can hang ~60s per process on first import).
+xattr -dr com.apple.quarantine .venv 2>/dev/null || true
 
 # Run the tests (citation verifier, fusion, ingestion, chunking, store, pipeline)
 pytest -q
@@ -97,10 +102,13 @@ uvicorn app.main:app --reload --app-dir apps/api   # http://localhost:8000/docs
 streamlit run apps/ui/streamlit_app.py             # http://localhost:8501
 ```
 
-> **Note on imports:** the app resolves the monorepo packages via a small path
-> bootstrap (`apps/api/app/__init__.py`) and `pytest` via `pyproject.toml`, so
-> things run even if your environment's editable-install `.pth` doesn't activate
-> (a known setuptools quirk when the project path contains a space).
+> **Note on imports:** `python scripts/dev_link.py` writes a plain-path `.pth`
+> into the active venv so `import shared`, `import retrieval`, etc. resolve in any
+> process. This is needed because setuptools' editable-install `.pth` uses an
+> import-hook that some environments don't execute (notably when the project path
+> contains a space). Tests also resolve via `pyproject.toml` `pythonpath`, and the
+> server via a bootstrap in `apps/api/app/__init__.py`, so those work even without
+> running `dev_link`.
 
 With the embedder/LLM left as `stub`, retrieval uses the deterministic stub embedder and
 synthesis abstains until Phase 4 wires a real LLM — the correct, safe default that
@@ -120,6 +128,8 @@ docker compose up --build
 | Endpoint | Purpose |
 |---|---|
 | `GET /health` | liveness |
+| `POST /retrieve` | ranked source chunks for a query (hybrid search + rerank) |
+| `POST /retrieve/refresh` | rebuild the in-process index after ingesting |
 | `POST /query` | run a question through the pipeline |
 | `GET /query/{id}` | fetch a prior query's audit record |
 | `POST /feedback` | advisor verdict (used / edited / rejected / disputed) |
