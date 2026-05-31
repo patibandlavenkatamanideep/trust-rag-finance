@@ -67,8 +67,8 @@ stub adapters for real LLM / retrieval / Postgres behind the same interfaces.
 | Phase | Scope | State |
 |---|---|---|
 | 1 Skeleton | monorepo, FastAPI, pipeline, audit, UI, tests, Docker | ✅ done |
-| 2 Ingestion | PDF parse, structure-aware chunk, embed, index | 🔜 stubs in place |
-| 3 Retrieval | BM25 + dense + RRF + rerank | 🔜 RRF done, adapters next |
+| 2 Ingestion | load (.txt/.pdf), structure-aware chunk, metadata, embed, SQLite index | ✅ done |
+| 3 Retrieval | BM25 + dense + RRF + rerank over the index | 🔜 RRF + store done, adapters next |
 | 4 Synthesis | LLM adapter + cited generation | 🔜 stub abstains |
 | 5 Verification | judge + confidence calibration | 🔜 deterministic verifier done |
 | 6 HITL UI | full widget | 🔜 baseline shipped |
@@ -81,13 +81,13 @@ Requires Python 3.11+.
 
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev,ui]"
+pip install -e ".[dev,ui]"     # installs third-party deps; our packages also resolve via path bootstrap
 
-# Run the tests (citation verifier, fusion, pipeline, chunking)
+# Run the tests (citation verifier, fusion, ingestion, chunking, store, pipeline)
 pytest -q
 
-# Try the ingestion + eval scripts
-python scripts/ingest.py data/sample_docs/apple_services_sample.txt
+# Ingest the sample corpus into the local SQLite index (no infra needed)
+python scripts/ingest.py data/sample_docs        # whole directory
 python scripts/run_eval.py
 
 # Run the API
@@ -97,8 +97,14 @@ uvicorn app.main:app --reload --app-dir apps/api   # http://localhost:8000/docs
 streamlit run apps/ui/streamlit_app.py             # http://localhost:8501
 ```
 
-With provider config left as `stub`, `/query` will **abstain** (no corpus indexed yet) —
-that is the correct, safe behavior and demonstrates the cardinal-failure guard.
+> **Note on imports:** the app resolves the monorepo packages via a small path
+> bootstrap (`apps/api/app/__init__.py`) and `pytest` via `pyproject.toml`, so
+> things run even if your environment's editable-install `.pth` doesn't activate
+> (a known setuptools quirk when the project path contains a space).
+
+With the embedder/LLM left as `stub`, retrieval uses the deterministic stub embedder and
+synthesis abstains until Phase 4 wires a real LLM — the correct, safe default that
+demonstrates the cardinal-failure guard.
 
 ### With Docker Compose
 

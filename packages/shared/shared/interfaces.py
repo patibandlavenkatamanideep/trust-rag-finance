@@ -65,6 +65,26 @@ class CitationVerifier(Protocol):
 
 
 @runtime_checkable
+class ChunkStore(Protocol):
+    """Persistence for ingested chunks + their embeddings.
+
+    Written by ingestion, read by retrieval. Idempotent upsert on chunk_id (D21)
+    so re-ingestion never duplicates. `status` drives current/superseded/withdrawn
+    handling; retrieval reads only `current` by default.
+    """
+
+    def upsert(self, records: list[dict[str, Any]]) -> int: ...
+
+    def all_current(self) -> list[dict[str, Any]]: ...
+
+    def get(self, chunk_id: str) -> dict[str, Any] | None: ...
+
+    def set_status(self, document_id: str, status: str) -> int: ...
+
+    def count(self) -> int: ...
+
+
+@runtime_checkable
 class AuditStore(Protocol):
     """Append-only audit seam (D24/D28). MVP = plain table; later = WORM/SIEM."""
 

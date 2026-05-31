@@ -1,0 +1,15 @@
+{
+  "extraPaths": [
+    "packages/shared",
+    "packages/ingestion",
+    "packages/retrieval",
+    "packages/synthesis",
+    "packages/verification",
+    "packages/evals",
+    "packages/audit",
+    "apps/api"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportMissingImports": "warning"
+}

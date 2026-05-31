@@ -1094,3 +1094,26 @@ Implementation notes added during the Phase 1 scaffold:
   correct safe default. Swap stubs for real LLM/retrieval/Postgres behind the seams.
 * Run tests with `pytest` (pythonpath configured in `pyproject.toml`).
 * The buildable enterprise spec (S1–S11, 33 decisions, 3 ADRs) is at `docs/buildable-spec.md`.
+
+## Build Log — Phase 2 (Ingestion) complete
+
+* Loaders (`ingestion/loaders.py`): `.txt`/`.md` native, `.pdf` via optional `pypdf`
+  (`pip install '.[ingest]'`). Page-aware. README files skipped in corpus dirs.
+* Metadata (`ingestion/metadata.py`): heuristics from filename convention
+  `TICKER_DOCTYPE_YEAR[_vN].ext`; unknown fields left None (never guessed).
+* Structure-aware, page-aware chunker (`ingestion/chunk.py::chunk_loaded_document`):
+  splits on detected section headings, packs ~target_tokens within a section, tags
+  disclosures, deterministic chunk ids (idempotent re-ingest).
+* Embeddings (`shared/embeddings.py`): `EmbeddingModel` adapters — deterministic
+  `StubEmbedder` (default, zero-dep) + optional `SentenceTransformerEmbedder` (`[ml]`).
+* `ChunkStore` seam (`shared/interfaces.py`) + SQLite adapter
+  (`retrieval/store.py::SqliteChunkStore`, stdlib, file at `data/index/chunks.db`).
+  Idempotent upsert; version-aware supersede; withdraw path; reads only `status='current'`.
+* Orchestration `ingestion/pipeline.py::ingest_path` (load→meta→chunk→embed→store) +
+  `scripts/ingest.py`. Tests: metadata, structured chunking, embeddings, store, e2e.
+* IMPORTANT: the setuptools editable `.pth` finder does NOT activate on this machine
+  (path contains a space). Imports resolve via: pytest pythonpath, `scripts/*` sys.path
+  inserts, and a path bootstrap in `apps/api/app/__init__.py` for the server. Third-party
+  deps still come from the normal `pip install -e .`.
+* NOTE: the live `/query` pipeline still uses `StubRetriever` — wiring the real retriever
+  to read from the ChunkStore (hybrid BM25+dense+RRF+rerank) is Phase 3.

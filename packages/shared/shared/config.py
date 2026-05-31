@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     judge_model: str = "claude-opus-4-8"
     classify_model: str = "claude-haiku-4-5-20251001"
 
+    # --- Embeddings / index store ---
+    embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_dim: int = 256  # used by the deterministic stub embedder
+    chunk_store_url: str = "sqlite:///data/index/chunks.db"
+
     # --- Retrieval ---
     retrieval_top_n: int = 50  # per-method candidate pool before fusion
     retrieval_top_k: int = 8  # after rerank, fed to synthesis
