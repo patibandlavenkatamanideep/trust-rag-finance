@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Env / secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Data artifacts (keep sample_docs/ and golden_questions/ tracked, ignore large/derived)
+data/**/*.pdf
+data/index/
+*.sqlite
+*.db
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
