@@ -1,0 +1,47 @@
+# Local dev stack. No Kubernetes for the MVP (CLAUDE.md).
+# Postgres for metadata/audit/eval; api (FastAPI); ui (Streamlit).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: trustrag
+      POSTGRES_PASSWORD: trustrag
+      POSTGRES_DB: trustrag
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trustrag"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://trustrag:trustrag@db:5432/trustrag
+      LLM_PROVIDER: stub
+      EMBEDDING_PROVIDER: stub
+      RERANKER_PROVIDER: stub
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: .
+      dockerfile: apps/ui/Dockerfile
+    environment:
+      TRUSTRAG_API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
