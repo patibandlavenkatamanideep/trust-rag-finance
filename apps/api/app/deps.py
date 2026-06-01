@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from audit.memory import InMemoryAuditStore
+from audit import get_audit_store
 from retrieval.hybrid import HybridRetriever
 from retrieval.rerank import get_reranker
 from retrieval.store import SqliteChunkStore
@@ -36,7 +36,7 @@ class _CitationVerifierAdapter:
 
 
 # Shared singletons (audit persists across requests; retriever caches its index).
-_AUDIT = InMemoryAuditStore()
+_AUDIT = get_audit_store()
 
 
 @lru_cache
@@ -75,5 +75,6 @@ def get_eval_pipeline() -> QueryPipeline:
     return _make_pipeline(ExtractiveSynthesizer())
 
 
-def get_audit() -> InMemoryAuditStore:
+def get_audit():
+    """The shared AuditStore (hash-chained SQLite by default)."""
     return _AUDIT

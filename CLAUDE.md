@@ -1199,6 +1199,26 @@ Implementation notes added during the Phase 1 scaffold:
   swap StubEmbedder) for the EntailmentJudge, or LLMJudge (note judge!=synth, D9). Then calibrate.
 * Tests: scoring/aggregation incl. the kill-metric case. Full suite: 45 passing.
 
+## Build Log — Phase 8 (Audit & Polish) in progress
+
+* Durable **hash-chained, tamper-evident audit ledger** (D24): `audit/sqlite.py::SqliteAuditStore`.
+  Each row: payload + prev_hash + row_hash = sha256(canonical_json(payload)+prev_hash), genesis
+  chained. `verify_chain()` recomputes + pinpoints the first break. Append-only (no UPDATE/DELETE
+  in write path); cross-thread safe (check_same_thread=False). `get_audit_store(cfg)` selects
+  sqlite (default) vs memory; wired in `app/deps.py`.
+* Feedback is now an **append-only ledger event** (ref_query_id), never a mutation of the past
+  record (mutation would break the chain — the point).
+* Routes: `GET /audit/verify` (integrity), `GET /audit/recent` (trace feed); literal routes
+  declared before `/audit/{query_id}`. UI page `apps/ui/pages/2_Audit_Trace.py` shows the chain
+  status + per-query provenance.
+* Tests (4): append/get, append-only duplicate reject, chain valid, TAMPER DETECTED (forged
+  payload breaks chain, identifies the row). E2E: 3 queries -> 3 chained entries, verify valid.
+  Full suite: 49 passing.
+* Railway deploy live (see docs/deployment.md). Remaining Phase 8: README architecture diagram,
+  demo video (user), optional Postgres AuditStore/ChunkStore adapters for cross-restart durability.
+* OPEN (from Phase 7): groundedness-judge calibration — lexical EntailmentJudge under-scores
+  Gemini's paraphrased answers (0.86 < 0.98). Make it semantic (real embeddings or LLM judge).
+
 ## macOS perf note
 
 Freshly pip-installed native libs (numpy/OpenBLAS, pydantic-core, psycopg) get Gatekeeper-

@@ -26,13 +26,25 @@ personalized financial advice**, and never sends client-facing recommendations.
 
 ## Architecture (at a glance)
 
+```mermaid
+flowchart TD
+    Q[Advisor question] --> P[Query parse + input guards<br/>advice / injection -> abstain]
+    P --> R[Hybrid retrieval<br/>BM25 + dense + RRF + rerank]
+    R --> S[Synthesis<br/>LLM Gemini/Claude or extractive<br/>structured CitedAnswer or abstain]
+    S --> V[Deterministic citation verify<br/>every claim -> a retrieved chunk]
+    V --> J[Groundedness judge<br/>independent, model-agnostic]
+    J --> C{Confidence band}
+    C -->|high| A[Answer + citations]
+    C -->|medium / low| H[HITL verify widget]
+    C -->|abstain| X[&quot;Not found in research&quot;]
+    A --> L[(Hash-chained audit ledger)]
+    H --> L
+    X --> L
+    L --> E[Eval harness<br/>7 metrics + deploy gate]
 ```
-Advisor question
-  -> query parse -> hybrid retrieval (BM25 + dense + RRF) -> rerank
-  -> context assembly -> structured cited generation (Pydantic)
-  -> deterministic citation verification -> groundedness judge
-  -> confidence scoring -> HITL verify flag if needed -> audit log -> eval loop
-```
+
+> Cardinal rule: a **confident wrong answer** is the failure to avoid. Every stage above is a
+> guard — citations, independent groundedness, conservative confidence, and abstention.
 
 Modular monorepo with clean internal boundaries that can later become services
 (see [docs/adr-001-service-boundaries.md](docs/adr-001-service-boundaries.md)). Concrete
@@ -73,7 +85,7 @@ stub adapters for real LLM / retrieval / Postgres behind the same interfaces.
 | 5 Verification | citation verify + independent groundedness judge + confidence + abstention | ✅ done |
 | 6 HITL UI | full widget | 🟡 baseline shipped |
 | 7 Evals | golden runner + 7 metrics + deploy gate + dashboard | ✅ done |
-| 8 Audit / polish | Postgres, hash-chain, deploy (Railway) | 🔜 in-memory store + seam |
+| 8 Audit / polish | hash-chained tamper-evident ledger + trace view + Railway deploy | 🟡 ledger + deploy done; demo video next |
 
 ## Quickstart (local, no API keys)
 
@@ -158,6 +170,8 @@ Nothing in the pipeline hardcodes a vendor.
 | `GET /query/{id}` | fetch a prior query's audit record |
 | `POST /feedback` | advisor verdict (used / edited / rejected / disputed) |
 | `GET /audit/{id}` | provenance trail for one query |
+| `GET /audit/verify` | recompute the hash chain (tamper-evidence check) |
+| `GET /audit/recent` | recent ledger entries (trace view feed) |
 | `POST /eval/run`, `GET /eval/results` | eval runner + deploy bars |
 
 ## Example questions (demo)

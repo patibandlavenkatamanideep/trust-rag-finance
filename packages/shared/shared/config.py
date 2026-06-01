@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 256  # used by the deterministic stub embedder
     chunk_store_url: str = "sqlite:///data/index/chunks.db"
+    audit_store: Literal["sqlite", "memory"] = "sqlite"
+    audit_store_url: str = "sqlite:///data/index/audit.db"
 
     # --- Retrieval ---
     retrieval_top_n: int = 50  # per-method candidate pool before fusion
