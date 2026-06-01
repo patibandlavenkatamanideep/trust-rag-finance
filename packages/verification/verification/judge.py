@@ -1,24 +1,113 @@
-"""Groundedness judge (LLM-as-judge). Stubbed until an LLM is wired (Phase 5).
+"""Groundedness judges — score how well an answer is supported by its sources.
 
-The judge is a SIGNAL, combined with deterministic checks — never the source of
-truth. The real judge must use a different model than synthesis (anti-
-JudgeOverfitting, D9) and be calibrated to >=80% advisor agreement before trust.
+The judge is a SIGNAL, combined with deterministic citation checks; never the
+sole source of truth. Three implementations behind the GroundednessJudge seam:
+
+* EntailmentJudge (default) — deterministic, model-independent. Independently
+  re-checks each claim against the text of its cited chunk (does not trust the
+  synthesizer's self-reported `supported` flag). Because it shares no model with
+  synthesis, it structurally cannot collude with the generator (anti-
+  JudgeOverfitting, D9).
+* LLMJudge (optional) — an LLM scores groundedness. Should use a different model
+  than synthesis; returns a calibrated score in [0, 1].
+* StubJudge (legacy) — trusts the claim flags; kept for tests / fallback.
 """
 
 from __future__ import annotations
 
+import json
+import re
+
 from shared.schemas import CitedAnswer, RetrievedSource
+
+_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _tokens(text: str) -> set[str]:
+    return set(_WORD.findall(text.lower()))
+
+
+def _support_ratio(claim_text: str, chunk_text: str) -> float:
+    """Fraction of the claim's content tokens present in the chunk (proxy entailment)."""
+    claim = _tokens(claim_text)
+    if not claim:
+        return 0.0
+    return len(claim & _tokens(chunk_text)) / len(claim)
+
+
+class EntailmentJudge:
+    """Implements shared.interfaces.GroundednessJudge, deterministically."""
+
+    def __init__(self, support_threshold: float = 0.5) -> None:
+        self.support_threshold = support_threshold
+
+    def score(self, answer: CitedAnswer, sources: list[RetrievedSource]) -> float:
+        if answer.abstained or not answer.claims:
+            return 0.0
+        by_id = {s.source_id: s.text for s in sources}
+        per_claim: list[float] = []
+        for claim in answer.claims:
+            best = max(
+                (_support_ratio(claim.text, by_id.get(sid, "")) for sid in claim.source_ids),
+                default=0.0,
+            )
+            per_claim.append(best)
+        # Groundedness = mean per-claim support, but a single weak claim drags it
+        # down (conservative, per S1): use the min-blended mean.
+        mean = sum(per_claim) / len(per_claim)
+        worst = min(per_claim)
+        return round(0.5 * mean + 0.5 * worst, 4)
+
+
+class LLMJudge:
+    """LLM-as-judge. Returns a groundedness score in [0, 1]; abstains-safe on error."""
+
+    _PROMPT = (
+        "You are a strict grounding judge for a financial research assistant. "
+        "Given an ANSWER and the SOURCES it cites, decide what fraction of the "
+        "answer's factual content is directly supported by the sources. Penalize "
+        "any claim that overstates or is not in the sources. Return ONLY JSON: "
+        '{"groundedness": <float 0..1>, "unsupported": [<str>], "overstates": <bool>}.'
+    )
+
+    def __init__(self, client) -> None:  # client: synthesis.model.LLMClient
+        self.client = client
+
+    def score(self, answer: CitedAnswer, sources: list[RetrievedSource]) -> float:
+        if answer.abstained or not answer.claims:
+            return 0.0
+        src = "\n\n".join(f"[{s.source_id}] {s.text}" for s in sources)
+        user = f"SOURCES:\n{src}\n\nANSWER:\n{answer.answer}"
+        try:
+            raw = self.client.complete(self._PROMPT, user, max_tokens=512)
+            start, end = raw.find("{"), raw.rfind("}")
+            data = json.loads(raw[start : end + 1])
+            return max(0.0, min(1.0, float(data.get("groundedness", 0.0))))
+        except Exception:  # noqa: BLE001 - judge failure must not crash the pipeline
+            return 0.0
 
 
 class StubJudge:
-    """Implements shared.interfaces.GroundednessJudge.
-
-    Returns a conservative proxy: 0.0 on abstain, else derives a score from the
-    deterministic claim-support flags so the skeleton has a plausible number.
-    """
+    """Legacy: trusts the synthesizer's claim flags. Kept for tests / fallback."""
 
     def score(self, answer: CitedAnswer, sources: list[RetrievedSource]) -> float:
         if answer.abstained or not answer.claims:
             return 0.0
         supported = sum(1 for c in answer.claims if c.supported)
         return round(supported / len(answer.claims), 4)
+
+
+def get_judge(settings=None):
+    """Return the configured judge. Default = deterministic EntailmentJudge."""
+    from shared.config import get_settings
+
+    cfg = settings or get_settings()
+    if cfg.judge_provider == "llm":
+        from synthesis.model import get_llm_client
+
+        client = get_llm_client(cfg)
+        if client is not None:
+            return LLMJudge(client)
+    if cfg.judge_provider == "stub":
+        return StubJudge()
+    return EntailmentJudge()

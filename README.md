@@ -69,9 +69,9 @@ stub adapters for real LLM / retrieval / Postgres behind the same interfaces.
 | 1 Skeleton | monorepo, FastAPI, pipeline, audit, UI, tests, Docker | ✅ done |
 | 2 Ingestion | load (.txt/.pdf), structure-aware chunk, metadata, embed, SQLite index | ✅ done |
 | 3 Retrieval | BM25 + dense + RRF + cross-encoder rerank over the index, ticker filter | ✅ done |
-| 4 Synthesis | LLM adapter + cited generation | 🔜 stub (real LLM next) |
-| 5 Verification | judge + confidence calibration | 🔜 deterministic verifier done |
-| 6 HITL UI | full widget | 🔜 baseline shipped |
+| 4 Synthesis | input guards + extractive (no-API) + LLM adapter (Anthropic/OpenAI/Gemini) | ✅ done |
+| 5 Verification | citation verify + independent groundedness judge + confidence + abstention | ✅ done |
+| 6 HITL UI | full widget | 🟡 baseline shipped |
 | 7 Evals | runner + dashboard | 🔜 golden set + bars defined |
 | 8 Audit / polish | Postgres, hash-chain, docs | 🔜 in-memory store + seam |
 

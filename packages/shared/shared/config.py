@@ -26,13 +26,19 @@ class Settings(BaseSettings):
     )
 
     # --- Model providers (keep provider-neutral; adapter selects impl) ---
-    llm_provider: Literal["anthropic", "openai", "bedrock", "stub"] = "stub"
+    llm_provider: Literal["anthropic", "openai", "gemini", "bedrock", "stub"] = "stub"
     embedding_provider: Literal["sentence_transformers", "openai", "voyage", "bedrock", "stub"] = "stub"
     reranker_provider: Literal["cross_encoder", "cohere", "stub"] = "stub"
+    # Groundedness judge. 'entailment' = deterministic, model-independent (default,
+    # anti-JudgeOverfitting); 'llm' = LLM-as-judge; 'stub' = legacy passthrough.
+    judge_provider: Literal["entailment", "llm", "stub"] = "entailment"
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
 
+    # Active-provider model override; falls back to synthesis_model when empty.
+    llm_model: str = ""
     synthesis_model: str = "claude-sonnet-4-6"
     judge_model: str = "claude-opus-4-8"
     classify_model: str = "claude-haiku-4-5-20251001"

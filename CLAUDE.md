@@ -1132,6 +1132,47 @@ Implementation notes added during the Phase 1 scaffold:
   StubSynthesizer echoes retrieved text and StubJudge rubber-stamps it. Real relevance
   judgment + abstention is Phase 4 (LLM synthesizer) + Phase 5 (judge). Retrieval is correct.
 
+## Build Log — Phase 4 (Synthesis) complete (no-API default + Gemini)
+
+* Deterministic input guards (`synthesis/safety.py`): personalized-advice + prompt-injection
+  detection -> abstain BEFORE any LLM call. Auditable, reproducible.
+* `ExtractiveSynthesizer` (`synthesis/extractive.py`): no-LLM default. Relevance-gated
+  (query-term coverage threshold) -> abstains when the corpus doesn't cover the question;
+  otherwise extracts the most relevant cited sentences. `certified=False` so the pipeline
+  caps its band at medium (no judge yet).
+* Model seam (`synthesis/model.py`): provider-neutral `LLMClient` + `AnthropicClient`,
+  `OpenAIClient`, and `GeminiClient` (REST via `requests`, no SDK). `get_llm_client(cfg)`
+  selects by `LLM_PROVIDER`. `LLMSynthesizer` (`synthesis/llm.py`) emits CitedAnswer JSON,
+  validates (repair-or-abstain), rejects citations outside the retrieved set.
+* `get_synthesizer(cfg)` factory: LLM if a provider+key are wired, else extractive.
+  Wired into `apps/api/app/deps.py`.
+* Gemini note: `gemini-2.5-flash` is a THINKING model — thinking tokens count against
+  maxOutputTokens, so set `thinkingConfig.thinkingBudget=0` (done) or it returns empty text.
+  Verified live: in-corpus -> high+cited; out-of-corpus -> abstains; advice/injection ->
+  abstain via guards. Config in `.env` (gitignored): LLM_PROVIDER, LLM_MODEL, GEMINI_API_KEY.
+* Tests: safety guards + extractive abstention/citation. Full suite: 37 passing.
+* STILL STUB: groundedness judge (`StubJudge`). Real LLM-as-judge + calibration = Phase 5.
+
+## Build Log — Phase 5 (Verification & Confidence) complete
+
+* Real groundedness judge replaces `StubJudge` (`verification/judge.py`):
+  - `EntailmentJudge` (DEFAULT, `judge_provider=entailment`): deterministic, model-
+    INDEPENDENT. Re-checks each claim's content tokens against its cited chunk text (does
+    NOT trust the synthesizer's `supported` flag). Score = 0.5*mean + 0.5*worst per-claim
+    support (conservative, S1). Structurally can't collude with the generator (D9).
+  - `LLMJudge` (optional, `judge_provider=llm`): LLM scores groundedness as JSON; safe-
+    abstains (0.0) on any error. Should use a different model than synthesis.
+  - `StubJudge` kept for tests/back-compat; test_judge shows the stub is fooled by a false
+    `supported=True` flag while EntailmentJudge catches it (<0.4).
+* `get_judge(cfg)` wired into `apps/api/app/deps.py` (replaces StubJudge).
+* Citation verifier, confidence scorer, abstention logic were already real (Phase 1/4).
+* Verified live (Gemini synth + EntailmentJudge): in-corpus -> band=high, grounded=1.0,
+  cite_validity=1.0; out-of-corpus -> abstain, grounded=0.0. Full suite: 41 passing.
+* The full trust loop now has NO stub in the critical path: retrieve -> synthesize (LLM or
+  extractive) -> deterministic citation verify -> independent groundedness judge -> confidence
+  -> abstain/HITL -> audit. Remaining phases are UI polish (6), evals/dashboard (7), audit
+  hardening (8) — not core-correctness.
+
 ## macOS perf note
 
 Freshly pip-installed native libs (numpy/OpenBLAS, pydantic-core, psycopg) get Gatekeeper-

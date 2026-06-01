@@ -20,7 +20,7 @@ from shared.interfaces import Retriever
 from shared.schemas import CitedAnswer, RetrievedSource, VerificationResult
 from synthesis import get_synthesizer
 from verification.citation import verify_citations
-from verification.judge import StubJudge
+from verification.judge import get_judge
 
 from app.pipeline import QueryPipeline
 
@@ -54,7 +54,7 @@ def get_pipeline() -> QueryPipeline:
         retriever=get_retriever(),
         synthesizer=get_synthesizer(),
         verifier=_CitationVerifierAdapter(),
-        judge=StubJudge(),
+        judge=get_judge(),
         audit=_AUDIT,
     )
 

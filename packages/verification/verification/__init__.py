@@ -8,6 +8,13 @@ self-report.
 
 from verification.citation import verify_citations
 from verification.confidence import score_confidence
-from verification.judge import StubJudge
+from verification.judge import EntailmentJudge, LLMJudge, StubJudge, get_judge
 
-__all__ = ["verify_citations", "score_confidence", "StubJudge"]
+__all__ = [
+    "verify_citations",
+    "score_confidence",
+    "EntailmentJudge",
+    "LLMJudge",
+    "StubJudge",
+    "get_judge",
+]
