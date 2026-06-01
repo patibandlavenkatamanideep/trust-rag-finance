@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from shared.config import get_settings
-from shared.logging import configure_logging
+from shared.logging import configure_logging, get_logger
 
 from app.routes import (
     audit,
@@ -53,12 +53,22 @@ def _seed_corpus_if_empty() -> None:
 
     from app.deps import get_retriever
 
-    store = SqliteChunkStore(cfg.chunk_store_url)
-    docs = Path("data/sample_docs")
-    if store.count() == 0 and docs.exists():
-        ingest_path(docs, store, get_embedder(cfg))
-        get_retriever().refresh()  # rebuild the in-process index
-    store.close()
+    log = get_logger("startup")
+    try:
+        store = SqliteChunkStore(cfg.chunk_store_url)
+        docs = Path("data/sample_docs")
+        if store.count() == 0 and docs.exists():
+            results = ingest_path(docs, store, get_embedder(cfg))
+            retriever = get_retriever()
+            if hasattr(retriever, "refresh"):
+                retriever.refresh()  # rebuild the in-process index
+            log.info("auto-ingest complete",
+                     extra={"fields": {"documents": len(results), "chunks": store.count()}})
+        store.close()
+    except Exception as exc:  # noqa: BLE001 - never let seeding block readiness
+        # The API must still become healthy; queries will abstain until a corpus exists.
+        log.error("auto-ingest failed; serving with empty corpus",
+                  extra={"fields": {"error": str(exc)}})
 
 
 @app.get("/")
