@@ -19,6 +19,7 @@ env/
 # Data artifacts (keep sample_docs/ and golden_questions/ tracked, ignore large/derived)
 data/**/*.pdf
 data/index/
+data/eval_results/
 *.sqlite
 *.db
 

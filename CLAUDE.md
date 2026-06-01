@@ -1173,6 +1173,32 @@ Implementation notes added during the Phase 1 scaffold:
   -> abstain/HITL -> audit. Remaining phases are UI polish (6), evals/dashboard (7), audit
   hardening (8) — not core-correctness.
 
+## Build Log — Phase 7 (Evals) complete
+
+* Golden set expanded to 12 questions (`data/golden_questions/golden.jsonl`) matched to the
+  AAPL/NVDA sample corpus + edge cases (out-of-corpus, advice, injection, out-of-scope).
+* `evals/runner.py`: drives the pipeline per question, `score_question` operationalizes the
+  asymmetric bar — false-confident = (band==high AND wrong) is the kill metric; over-abstaining
+  is incorrect but NOT false-confident. `aggregate_metrics` (`evals/metrics.py`) computes the 7
+  metrics + latency; `gate()` applies DEPLOY_BARS.
+* Eval composition: `app/deps.py::get_eval_pipeline()` forces the no-API ExtractiveSynthesizer
+  (free iteration); `--live` / `?live=true` uses the configured LLM provider.
+* CLI `scripts/run_eval.py` (ingests if empty, prints table + gate, saves
+  `data/eval_results/latest.json`, gitignored). Routes `POST /eval/run`, `GET /eval/results`.
+  Streamlit dashboard page `apps/ui/pages/1_Eval_Dashboard.py`.
+* RESULTS — extractive: groundedness 1.0, false_confident 0.0, citation_validity 1.0,
+  recall@10 1.0, correctness 0.917, abstention_precision 0.833 (< 0.95) => GATE FAIL (cheap
+  extractive OVER-ABSTAINS on one risk question).
+* RESULTS — live Gemini: abstention_precision 1.0 + correctness 1.0 (LLM answers it), but
+  groundedness drops to 0.86 (< 0.98) => GATE FAIL on a DIFFERENT metric. Root cause: Gemini
+  PARAPHRASES while EntailmentJudge scores groundedness by LEXICAL overlap, so it under-measures
+  grounded paraphrase. Corroborating: citation_validity 1.0, hallucination 0, false_confident 0
+  — answers ARE grounded; the lexical judge is just conservative. This is the judge-calibration
+  gap the spec flags (S3/D15). avg latency ~7.3s/query (Gemini).
+* OPEN: raise the groundedness judge to SEMANTIC — real embeddings ([ml] sentence-transformers,
+  swap StubEmbedder) for the EntailmentJudge, or LLMJudge (note judge!=synth, D9). Then calibrate.
+* Tests: scoring/aggregation incl. the kill-metric case. Full suite: 45 passing.
+
 ## macOS perf note
 
 Freshly pip-installed native libs (numpy/OpenBLAS, pydantic-core, psycopg) get Gatekeeper-

@@ -37,7 +37,10 @@ class SqliteChunkStore:
         self.path = _sqlite_path(url)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(self.path)
+        # check_same_thread=False: a uvicorn worker handles requests on threads
+        # distinct from the startup thread that builds the index. SQLite serializes
+        # access internally; our access is read-heavy + low-concurrency for the pilot.
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_schema()
 

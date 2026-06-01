@@ -72,8 +72,8 @@ stub adapters for real LLM / retrieval / Postgres behind the same interfaces.
 | 4 Synthesis | input guards + extractive (no-API) + LLM adapter (Anthropic/OpenAI/Gemini) | ✅ done |
 | 5 Verification | citation verify + independent groundedness judge + confidence + abstention | ✅ done |
 | 6 HITL UI | full widget | 🟡 baseline shipped |
-| 7 Evals | runner + dashboard | 🔜 golden set + bars defined |
-| 8 Audit / polish | Postgres, hash-chain, docs | 🔜 in-memory store + seam |
+| 7 Evals | golden runner + 7 metrics + deploy gate + dashboard | ✅ done |
+| 8 Audit / polish | Postgres, hash-chain, deploy (Railway) | 🔜 in-memory store + seam |
 
 ## Quickstart (local, no API keys)
 
@@ -122,6 +122,30 @@ docker compose up --build
 # UI   -> http://localhost:8501
 # Postgres on :5432
 ```
+
+## Models & providers
+
+The LLM layer is **provider-neutral** — one `LLMClient` interface
+([model.py](packages/synthesis/synthesis/model.py)), selected by `LLM_PROVIDER` in `.env`.
+Nothing in the pipeline hardcodes a vendor.
+
+| `LLM_PROVIDER` | Model | Needs | Status |
+|---|---|---|---|
+| `gemini` | `gemini-2.5-flash` (REST, no SDK) | `GEMINI_API_KEY` | **active live default** — low-cost MVP synthesis |
+| `anthropic` | Claude (Sonnet/Opus) | `ANTHROPIC_API_KEY` | supported — spec-aligned premium option |
+| `openai` | GPT models | `OPENAI_API_KEY` | supported |
+| `stub` | extractive, no LLM | — | **repo default** (clone-and-run, no key) |
+
+- **Live demo runs on Gemini**, which proves the adapter is provider-neutral and keeps MVP
+  cost low. Switch providers by changing two env vars — no code change.
+- The **committed default is `stub`** so the project runs with zero keys (the extractive
+  synthesizer abstains correctly without any API). Your local `.env` sets `gemini`.
+- The **groundedness judge is model-independent** (deterministic `EntailmentJudge`) — it does
+  not depend on whichever LLM does synthesis, so the trust signal can't collude with the
+  generator (anti-JudgeOverfitting).
+- Claude is the spec-aligned target (`SYNTHESIS_MODEL=claude-sonnet-4-6`,
+  `JUDGE_MODEL=claude-opus-4-8`) and can be enabled later as a premium provider once the eval
+  harness is stable.
 
 ## API
 

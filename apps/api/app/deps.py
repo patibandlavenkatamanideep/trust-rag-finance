@@ -19,6 +19,7 @@ from shared.embeddings import get_embedder
 from shared.interfaces import Retriever
 from shared.schemas import CitedAnswer, RetrievedSource, VerificationResult
 from synthesis import get_synthesizer
+from synthesis.extractive import ExtractiveSynthesizer
 from verification.citation import verify_citations
 from verification.judge import get_judge
 
@@ -48,15 +49,30 @@ def get_retriever() -> Retriever:
     )
 
 
-@lru_cache
-def get_pipeline() -> QueryPipeline:
+def _make_pipeline(synthesizer) -> QueryPipeline:
     return QueryPipeline(
         retriever=get_retriever(),
-        synthesizer=get_synthesizer(),
+        synthesizer=synthesizer,
         verifier=_CitationVerifierAdapter(),
         judge=get_judge(),
         audit=_AUDIT,
     )
+
+
+@lru_cache
+def get_pipeline() -> QueryPipeline:
+    """Live pipeline using the configured synthesizer (Gemini/Claude/.../extractive)."""
+    return _make_pipeline(get_synthesizer())
+
+
+@lru_cache
+def get_eval_pipeline() -> QueryPipeline:
+    """Eval pipeline forced to the no-API extractive synthesizer (zero cost).
+
+    Use this for fast, free eval iteration. Pass live=True at the call site to
+    eval the configured LLM provider instead.
+    """
+    return _make_pipeline(ExtractiveSynthesizer())
 
 
 def get_audit() -> InMemoryAuditStore:
