@@ -40,10 +40,16 @@ _AUDIT = get_audit_store()
 
 
 @lru_cache
+def get_chunk_store() -> SqliteChunkStore:
+    """Shared chunk store handle for live ingestion writes (Phase 9)."""
+    return SqliteChunkStore(get_settings().chunk_store_url)
+
+
+@lru_cache
 def get_retriever() -> Retriever:
     cfg = get_settings()
     return HybridRetriever(
-        store=SqliteChunkStore(cfg.chunk_store_url),
+        store=get_chunk_store(),
         embedder=get_embedder(cfg),
         reranker=get_reranker(cfg),
     )

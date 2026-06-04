@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 256  # used by the deterministic stub embedder
     chunk_store_url: str = "sqlite:///data/index/chunks.db"
+    # Live corpus dir scanned by ingestion + the nightly job (Phase 9). Falls back
+    # to data/sample_docs for the seeded demo when research_reports is empty.
+    corpus_dir: str = "data/research_reports"
+    fallback_corpus_dir: str = "data/sample_docs"
     audit_store: Literal["sqlite", "memory"] = "sqlite"
     audit_store_url: str = "sqlite:///data/index/audit.db"
 

@@ -22,17 +22,42 @@ from shared.schemas import CitedAnswer, RetrievedSource
 
 _WORD = re.compile(r"[a-z0-9]+")
 
+# Function words carry no grounding signal; counting them inflates the denominator
+# and unfairly penalizes paraphrase. Score on CONTENT words only.
+_STOPWORDS = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was",
+    "were", "be", "been", "by", "with", "at", "as", "it", "its", "this", "that", "these",
+    "those", "from", "has", "have", "had", "their", "they", "them", "which", "such",
+    "including", "include", "includes", "various", "other", "also", "can", "could", "will",
+    "would", "may", "might", "across", "all", "more", "than", "into", "over", "company",
+    "companys", "s",
+}
 
-def _tokens(text: str) -> set[str]:
-    return set(_WORD.findall(text.lower()))
+
+def _stem(token: str) -> str:
+    """Tiny deterministic stemmer so grew/growth, regulatory/regulation, etc. match."""
+    for suffix in ("ing", "edly", "ed", "ly", "ies", "es", "s", "ment", "tion", "ation"):
+        if len(token) > len(suffix) + 2 and token.endswith(suffix):
+            return token[: -len(suffix)]
+    return token
+
+
+def _content_stems(text: str) -> set[str]:
+    return {_stem(t) for t in _WORD.findall(text.lower()) if t not in _STOPWORDS and len(t) > 1}
 
 
 def _support_ratio(claim_text: str, chunk_text: str) -> float:
-    """Fraction of the claim's content tokens present in the chunk (proxy entailment)."""
-    claim = _tokens(claim_text)
+    """Fraction of the claim's content stems present in the chunk (proxy entailment).
+
+    Stopword-filtered + stemmed so a paraphrase that preserves the facts scores
+    high, while a fabricated claim (different content words) still scores low. This
+    is the deterministic, model-independent groundedness proxy; swap LLMJudge for a
+    semantic check when a separate judge model is available.
+    """
+    claim = _content_stems(claim_text)
     if not claim:
         return 0.0
-    return len(claim & _tokens(chunk_text)) / len(claim)
+    return len(claim & _content_stems(chunk_text)) / len(claim)
 
 
 class EntailmentJudge:

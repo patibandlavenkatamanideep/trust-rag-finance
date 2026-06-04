@@ -1,4 +1,70 @@
-# CLAUDE.md
+# CLAUDE.md — TrustRAG Finance
+
+## Project Mission (Updated – Standout + Live Version)
+Build **TrustRAG Finance** into a **standout, production-grade, always-live portfolio project** that:
+- Automatically stays fresh as real equity research data arrives over time
+- Feels like a real internal wealth-research tool used by advisors
+- Demonstrates senior-level AI engineering (trust, evaluation, reliability)
+- Is ready for a high-quality demo video that recruiters and hiring managers will remember
+
+This is no longer just a prototype — it is a **live, self-updating Research Skill**.
+
+## Core Philosophy (Locked In)
+- Build deterministic **skills**, not agents (Anthropic AI Engineer Summit principle).
+- Cardinal failure = confident-but-wrong answer.
+- Abstention is a success.
+- Every answer must be fully cited, verifiable, and auditable.
+- Evaluation gates are hard blockers (never ship if any bar is broken).
+
+## Key Goals for Standout Quality
+1. **Always Live & Fresh**
+   - Data must be added automatically as time passes.
+   - Nightly batch ingestion (realistic for research reports).
+   - Simulated webhook path for withdrawals/superseded reports.
+   - System must detect and surface fresh vs stale content.
+
+2. **Production Stability**
+   - Hash-chained append-only audit (Postgres).
+   - OpenTelemetry traces (self-hosted Langfuse ready).
+   - Health checks, retries, timeouts, rate limiting.
+   - Railway deployment that survives restarts and auto-reingests.
+
+3. **Portfolio Impact**
+   - Clean, professional README with architecture diagram.
+   - Visible evaluation dashboard (7 metrics + golden dataset results).
+   - One-click demo flow that shows citation verification + abstention + confidence.
+   - Demo video that clearly explains the trust-first design.
+
+## Data Freshness Rules (Automated)
+- **Nightly Ingestion** (GitHub Actions cron or Railway cron):
+  - Scan `data/research_reports/` folder.
+  - Process only new or updated PDFs (idempotent + version-aware).
+  - Use deterministic chunk IDs: `hash(report_id + version + section + index)`.
+  - Mark old versions as "superseded".
+- **Manual / Webhook Path** (for demo):
+  - Simple endpoint `/ingest/webhook` that accepts a new report or withdrawal notice.
+  - Immediately re-index and invalidate stale cache.
+- **Minimum Data Rule**:
+  - Keep at least 15–25 real equity research PDFs at all times.
+  - Add 2–5 new reports every week (Apple, Nvidia, Tesla, JPM, etc.).
+  - Never let the corpus become stale.
+
+## Standout Priorities (in order)
+Freshness → Stability → Demo readiness → Polish.
+Every new feature must maintain the 7-metric deploy gate. After any change, run full eval + ingestion.
+
+## Demo Video Requirements (60–90s, outstanding)
+1. 0–10s: Problem statement + "confident wrong answer" risk.
+2. 10–30s: Live query → fully cited answer + expandable sources.
+3. 30–50s: Abstention on out-of-scope / injection / personalized advice.
+4. 50–70s: Evaluation dashboard (7 metrics passing) + golden dataset.
+5. 70–end: "This is a real Research Skill, not an agent" + architecture overview.
+6. End screen: GitHub link + "Built in X days as solo project".
+Title: "TrustRAG Finance – Production-Grade Research Skill for Wealth Advisors".
+
+---
+
+# Original Frozen Spec (reference — decisions still binding)
 
 ## Project Name
 
