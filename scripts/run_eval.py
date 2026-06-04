@@ -28,12 +28,21 @@ from evals.runner import run_eval  # noqa: E402
 RESULTS_PATH = ROOT / "data" / "eval_results" / "latest.json"
 
 
+def _corpus_dir(cfg) -> Path:
+    """Use the live corpus (research_reports); fall back to the synthetic samples."""
+    primary = ROOT / cfg.corpus_dir
+    if primary.exists() and any(primary.iterdir()):
+        return primary
+    return ROOT / cfg.fallback_corpus_dir
+
+
 def _ensure_corpus() -> None:
     cfg = get_settings()
     store = SqliteChunkStore(cfg.chunk_store_url)
     if store.count() == 0:
-        print("Index empty — ingesting data/sample_docs ...")
-        ingest_path(ROOT / "data" / "sample_docs", store, get_embedder(cfg))
+        d = _corpus_dir(cfg)
+        print(f"Index empty — ingesting {d.relative_to(ROOT)} ...")
+        ingest_path(d, store, get_embedder(cfg))
     store.close()
 
 

@@ -140,21 +140,70 @@ def _split_into_sections(text: str) -> list[tuple[str, str]]:
     return [(title, "\n".join(lines).strip()) for title, lines in sections if "".join(lines).strip()]
 
 
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
+_MIN_CHUNK_WORDS = 5  # drop heading-only fragments
+
+
+def _sentence_split(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_RE.split(text) if s.strip()]
+
+
+def _to_units(section_text: str, target_tokens: int) -> list[str]:
+    """Break a section into units of <= ~target_tokens words.
+
+    Split on blank lines first; any paragraph longer than target_tokens is split
+    by sentences; any sentence still too long is split into fixed word windows.
+    This is robust to HTML-stripped filings that lack paragraph breaks (where a
+    whole section would otherwise become one giant chunk).
+    """
+    units: list[str] = []
+    for para in (p.strip() for p in re.split(r"\n\s*\n", section_text)):
+        if not para:
+            continue
+        if len(para.split()) <= target_tokens:
+            units.append(para)
+            continue
+        for sent in _sentence_split(para):
+            words = sent.split()
+            if len(words) <= target_tokens:
+                units.append(sent)
+            else:
+                for i in range(0, len(words), target_tokens):
+                    units.append(" ".join(words[i : i + target_tokens]))
+    return units
+
+
+def _pack_units(section_text: str, target_tokens: int) -> list[str]:
+    """Pack units into ~target_tokens chunks; drop trivially small fragments."""
+    out: list[str] = []
+    buf: list[str] = []
+    approx = 0
+    for unit in _to_units(section_text, target_tokens):
+        w = len(unit.split())
+        if buf and approx + w > target_tokens:
+            out.append(" ".join(buf))
+            buf, approx = [], 0
+        buf.append(unit)
+        approx += w
+    if buf:
+        out.append(" ".join(buf))
+    return [c for c in out if len(c.split()) >= _MIN_CHUNK_WORDS]
+
+
 def chunk_loaded_document(
     *,
     document_id: str,
     pages: list[tuple[int, str]],
     version: str = "v1",
     target_tokens: int = 800,
-    overlap_paragraphs: int = 1,
     **metadata,
 ) -> list[Chunk]:
     """Structure-aware, page-aware chunker for a loaded document.
 
-    Walks each page, splits on detected section headings, then packs paragraphs
-    into ~target_tokens chunks within a section (sections are never merged). Each
-    chunk keeps its section title and the page it started on for citations.
-    Disclosure-like sections are tagged in metadata.
+    Walks each page, splits on detected section headings, then packs the section
+    text into ~target_tokens chunks (sections are never merged). Long paragraphs
+    are split by sentence so no chunk exceeds the budget. Each chunk keeps its
+    section title and page for citations; disclosure-like sections are tagged.
     """
     chunks: list[Chunk] = []
     index = 0
@@ -162,23 +211,16 @@ def chunk_loaded_document(
     for page_no, page_text in pages:
         for section_title, section_text in _split_into_sections(page_text):
             is_disclosure = any(h in section_text.lower() for h in _DISCLOSURE_HINTS)
-            paragraphs = [p.strip() for p in re.split(r"\n\s*\n", section_text) if p.strip()]
-            buf: list[str] = []
-            approx = 0
-
-            def flush(buf_local: list[str]) -> None:
-                nonlocal index
-                if not buf_local:
-                    return
-                body = "\n\n".join(buf_local)
+            title = f"{section_title} [disclosure]" if is_disclosure else section_title
+            for body in _pack_units(section_text, target_tokens):
                 meta = dict(metadata)
-                if is_disclosure:
-                    meta["section_title"] = f"{section_title} [disclosure]"
                 chunks.append(
                     Chunk(
-                        chunk_id=make_chunk_id(document_id, version, f"{section_title}:{page_no}", index),
+                        chunk_id=make_chunk_id(
+                            document_id, version, f"{section_title}:{page_no}", index
+                        ),
                         document_id=document_id,
-                        section_title=meta.pop("section_title", section_title),
+                        section_title=meta.pop("section_title", title),
                         page=page_no,
                         text=body,
                         version=version,
@@ -186,14 +228,5 @@ def chunk_loaded_document(
                     )
                 )
                 index += 1
-
-            for para in paragraphs:
-                approx += len(para.split())
-                buf.append(para)
-                if approx >= target_tokens:
-                    flush(buf)
-                    buf = buf[-overlap_paragraphs:] if overlap_paragraphs else []
-                    approx = sum(len(p.split()) for p in buf)
-            flush(buf)
 
     return chunks

@@ -27,7 +27,7 @@ from pathlib import Path
 import requests
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = ROOT / "data" / "sample_docs"
+OUT_DIR = ROOT / "data" / "research_reports"  # the live, self-updating corpus
 USER_AGENT = os.environ.get(
     "SEC_USER_AGENT", "TrustRAG Finance (educational project) contact@example.com"
 )
