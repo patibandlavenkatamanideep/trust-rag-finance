@@ -51,7 +51,9 @@ class Settings(BaseSettings):
     # to data/sample_docs for the seeded demo when research_reports is empty.
     corpus_dir: str = "data/research_reports"
     fallback_corpus_dir: str = "data/sample_docs"
-    audit_store: Literal["sqlite", "memory"] = "sqlite"
+    # 'postgres' uses DATABASE_URL via SQLAlchemy (durable on Railway); 'sqlite'
+    # (default) is the local file ledger; 'memory' is process-local for tests.
+    audit_store: Literal["sqlite", "postgres", "memory"] = "sqlite"
     audit_store_url: str = "sqlite:///data/index/audit.db"
 
     # --- Retrieval ---

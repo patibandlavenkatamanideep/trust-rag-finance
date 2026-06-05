@@ -47,9 +47,13 @@ Railway's container filesystem resets on each deploy. Options:
   Stateless and fine for a portfolio demo.
 - **Persistent index/audit:** attach a **Railway Volume** mounted at `data/index/`
   so the SQLite ChunkStore + hash-chained audit ledger survive redeploys.
-- **Production path:** swap the `ChunkStore` / `AuditStore` seams for **Railway
-  Postgres (+ pgvector)** — adapter swaps behind `shared.interfaces`, no pipeline
-  changes. Set `DATABASE_URL` from the Railway Postgres plugin.
+- **Durable Postgres audit (recommended):** add the **Railway Postgres** plugin
+  (sets `DATABASE_URL`), then set `AUDIT_STORE=postgres`. The hash-chained,
+  tamper-evident ledger now persists across restarts via `SqlAuditStore`
+  (SQLAlchemy) — identical code/behavior to the local SQLite ledger, just a
+  different URL. `GET /audit/verify` keeps working.
+- **Next:** a Postgres + pgvector `ChunkStore` adapter for the retrieval index
+  (same seam, in progress). Until then the index re-seeds on boot via `AUTO_INGEST`.
 
 ## Exposing the API publicly too (optional)
 

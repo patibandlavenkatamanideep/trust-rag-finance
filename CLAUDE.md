@@ -1,6 +1,27 @@
 # CLAUDE.md — TrustRAG Finance
 
-## Project Mission (Updated – Standout + Live Version)
+## Production Target (current direction — supersedes the demo framing below)
+TrustRAG Finance is being hardened from a portfolio demo into a **production-grade,
+evaluation-first, read-only Research Skill** ready for real internal deployment in a
+regulated financial environment. Non-negotiables: deterministic span-level citation
+verification, hash-chained tamper-evident audit, calibrated confidence with hard
+abstention, and the 7-metric hard deploy gate (groundedness ≥ 0.98, false-confident ≈ 0).
+
+**Production roadmap (active):**
+1. Durable storage — **SQLite → Postgres** for the audit ledger + chunk/metadata store (Railway Volume/Postgres).
+2. Retrieval at scale — pgvector / OpenSearch hybrid (BM25 + dense + RRF + cross-encoder rerank).
+3. LLM layer — provider-neutral, strict Pydantic output, independent judge (judge ≠ synth); Bedrock/Claude routing target.
+4. Observability/ops — OpenTelemetry traces, Langfuse, Prometheus/Grafana, rate limiting, cost circuit breakers.
+5. Reliability — split services (query ↔ retrieval) with timeout + circuit breaker; retries/timeouts everywhere.
+6. Data freshness — nightly batch ingestion + webhook supersede/withdraw; real SEC 10-K corpus (done: 6 filings).
+7. Security/compliance — threat model, PII redaction/guardrails, retention + tamper-evidence for regulatory review.
+
+Coding rule: every change must keep the 7-metric deploy gate green and prefer production
+patterns (timeouts, retries, circuit breakers, structured logging, idempotency).
+
+---
+
+## Project Mission (earlier — Standout + Live Version)
 Build **TrustRAG Finance** into a **standout, production-grade, always-live portfolio project** that:
 - Automatically stays fresh as real equity research data arrives over time
 - Feels like a real internal wealth-research tool used by advisors
@@ -1284,6 +1305,27 @@ Implementation notes added during the Phase 1 scaffold:
   demo video (user), optional Postgres AuditStore/ChunkStore adapters for cross-restart durability.
 * OPEN (from Phase 7): groundedness-judge calibration — lexical EntailmentJudge under-scores
   Gemini's paraphrased answers (0.86 < 0.98). Make it semantic (real embeddings or LLM judge).
+
+## Build Log — Production hardening (in progress)
+
+* REAL CORPUS: 6 SEC 10-Ks in `data/research_reports/` (AAPL, NVDA, MSFT, TSLA, JPM, META)
+  via `scripts/fetch_edgar.py` (OUT_DIR=research_reports). 215 chunks.
+* CHUNKER BUG FIXED: real HTML-stripped filings have few blank lines, so the old chunker
+  emitted 30k-word section-sized chunks (+ 1-word fragments). `chunk.py` now sentence-splits
+  oversized paragraphs and caps chunks at target_tokens (max 800 words, 0 oversized);
+  drops <5-word fragments. `_to_units`/`_pack_units`.
+* EVAL is corpus-aware: `run_eval._ensure_corpus` + `main.py` startup ingest resolve
+  `corpus_dir` (research_reports) with fallback to `sample_docs`. Golden set rewritten to the
+  6-ticker corpus (13 Qs). On real data, FULL DEPLOY GATE PASSES (extractive): groundedness 1.0,
+  false_confident 0, recall 1.0, correctness 1.0, abstention_precision 1.0.
+* COMBINED RAILWAY SERVICE: root `Dockerfile` + `scripts/start.sh` run UI (public $PORT) +
+  API (internal :8000) in one container; `railway.json` healthcheck `/_stcore/health`. SQLite
+  cross-thread fix (check_same_thread=False) already in stores.
+* DURABLE AUDIT (SQLite -> Postgres): `audit/db.py::SqlAuditStore` (SQLAlchemy) — same hash-
+  chained, tamper-evident ledger on SQLite + Postgres. `AUDIT_STORE=postgres` + `DATABASE_URL`
+  (Railway Postgres plugin) selects it. Tested on sqlite incl. tamper detection. Full suite: 56.
+* NEXT: Postgres+pgvector `ChunkStore` adapter; API resilience (rate limit, timeouts, LLM
+  retry/backoff); observability (OTel/Langfuse). UI redesigned (friendly, non-technical).
 
 ## macOS perf note
 
